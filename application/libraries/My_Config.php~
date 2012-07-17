@@ -1,0 +1,79 @@
+<?php  if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+/* This helper allows to store aplication config data in the database */
+
+/* First you need to create a db table
+
+CREATE TABLE `config` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `array` int(1) DEFAULT NULL,
+  `name` char(255) DEFAULT NULL,
+  `value` text,
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=6 DEFAULT CHARSET=utf8
+
+Description:
+
+This extension has two functions:
+
+
+
+$this->config->set($name, $value);
+
+This function sets the config value.
+
+$name - the name of config value stored (for example: price_per_kg)
+$value - the value
+
+If $name already exists in database, this will be updated. Otherwise inserted. Return value is number of affected rows.
+
+Value can be an array or plain value.
+
+
+
+$this->config->get($name);
+
+This function returns the value of $name from database.
+
+*/
+
+class MY_Config extends CI_Config {
+
+    var $is_insert = true;    
+
+    function set($name, $value) {
+    
+        /* create codeigniter object instance for db access */
+        $this->CI =& get_instance();
+    
+        $array = is_array($value);
+        $data = $array ? serialize($value) : $value;
+
+        $this->CI->db->where('name', $name);
+        //$count = $this->CI->db->count_all_results('config');
+	$count = $this->CI->db->count_all('config');
+    
+        if ($count) {
+            $this->CI->db->where('name', $name);
+            $this->CI->db->update('config', array('value' => $data, 'array' => $array));
+        }
+        else {
+            $this->CI->db->insert('config', array(    'value' => $data,
+                                                    'name' => $name,
+                                                     'array' => $array));
+        }
+    
+        return $this->CI->db->affected_rows();            
+    }
+    
+    function get($name) {
+        
+        /* create codeigniter object instance for db access */
+        $this->CI =& get_instance();
+        
+        $query = $this->CI->db->get_where('config', array('name' => $name));
+        $result = $query->row_array();
+    
+        return $result ? ($result['array'] ? unserialize($result['value']) : $result['value']) : NULL;
+    }
+} 

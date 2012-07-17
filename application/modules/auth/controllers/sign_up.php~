@@ -1,0 +1,106 @@
+<?php
+
+class Sign_up_new extends CI_Controller {
+
+	function __construct() {
+
+		parent::__construct();
+		
+		// Load the necessary stuff...
+		$this->load->config('auth/auth_new');
+		$this->load->helper(array('language', 'ssl', 'url'));
+       	$this->load->library(array('auth/authentication_new', 'auth/recaptcha', 'form_validation'));
+		$this->load->model(array('auth/account_model_new', 'auth/account_details_model_new'));
+		$this->load->language(array('general', 'auth/auth_new'));
+	}
+
+	function index() {
+			
+		// Enable SSL?
+		maintain_ssl($this->config->item("ssl_enabled"));
+		
+		// Redirect signed in users to homepage
+		if ($this->authentication_new->is_signed_in()) redirect('');
+		
+		// Check recaptcha
+		$recaptcha_result = $this->recaptcha->check();
+		
+		// Store recaptcha pass in session so that users only needs to complete captcha once
+		if ($recaptcha_result === TRUE) $this->session->set_userdata('sign_up_recaptcha_pass', TRUE);
+		
+		// Setup form validation
+		//$this->form_validation->set_error_delimiters('<div class="errors"><p>', '</p></div>');
+		$this->form_validation->set_rules(array(
+			array('field'=>'sign_up_username', 'label'=>'lang:sign_up_username', 'rules'=>'trim|required|alpha_dash|min_length[2]|max_length[24]'),
+			array('field'=>'sign_up_password', 'label'=>'lang:sign_up_password', 'rules'=>'trim|required|min_length[6]'),
+			array('field'=>'sign_up_email', 'label'=>'lang:sign_up_email', 'rules'=>'trim|required|valid_email|max_length[160]')
+		));
+		
+		// Run form validation
+		if ($this->form_validation->run() === TRUE) {
+
+			// Check if user name is taken
+			if ($this->username_check($this->input->post('sign_up_username')) === TRUE) {
+				$data['sign_up_username_error'] = lang('sign_up_username_taken');
+			}
+			// Check if email already exist
+			elseif ($this->email_check($this->input->post('sign_up_email')) === TRUE) {
+				$data['sign_up_email_error'] = lang('sign_up_email_exist');
+			}
+			// Either already pass recaptcha or just passed recaptcha
+			elseif ( ! ($this->session->userdata('sign_up_recaptcha_pass') == TRUE || $recaptcha_result === TRUE) && $this->config->item("sign_up_recaptcha_enabled") === TRUE) {
+				$data['sign_up_recaptcha_error'] = $this->input->post('recaptcha_response_field') ? lang('sign_up_recaptcha_incorrect') : lang('sign_up_recaptcha_required');
+			}
+			else {
+				// Remove recaptcha pass
+				$this->session->unset_userdata('sign_up_recaptcha_pass');
+				
+				// Create user
+				$user_id = $this->account_model_new->create($this->input->post('sign_up_username'), $this->input->post('sign_up_email'), $this->input->post('sign_up_password'));
+				
+				// Add user details (auto detected country, language, timezone)
+				$this->account_details_model_new->update($user_id);
+				
+				// Auto sign in?
+				if ($this->config->item("sign_up_auto_sign_in")) {
+					
+					$this->session->set_userdata('sign_in_redirect','auth/sign_in_new');
+					
+					// Run sign in routine
+					$this->authentication_new->sign_in($user_id);
+				}
+
+				redirect('auth/sign_in_new');
+			}
+		}
+
+		// Load recaptcha code
+		if ($this->config->item("sign_up_recaptcha_enabled") === TRUE)
+			if ($this->session->userdata('sign_up_recaptcha_pass') != TRUE) 
+				$data['recaptcha'] = $this->recaptcha->load($recaptcha_result, $this->config->item("ssl_enabled"));
+		
+		// Load sign up view
+		$this->load->view('sign_up_new', isset($data) ? $data : NULL);
+	}
+
+	function username_check($username) {
+
+		return $this->account_model_new->get_by_username($username) ? TRUE : FALSE;
+	}
+	
+	public function check_username() {		
+		
+		$a= $this->account_model_new->get_by_username($this->input->post("username"));
+		if($a) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+
+	function email_check($email) {
+
+		return $this->account_model_new->get_by_email($email) ? TRUE : FALSE;
+	}
+}

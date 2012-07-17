@@ -1,0 +1,4 @@
+RewriteEngine on 
+RewriteRule ^$ /ujian/index.php [L] 
+RewriteCond $1 !^(index\.php|resource|system|user_guide|robots\.txt|favicon\.ico) 
+RewriteRule ^(.*)$ /ujian/index.php/$1 [L]
